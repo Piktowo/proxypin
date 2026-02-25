@@ -64,7 +64,7 @@ jobs:
           set -o pipefail
           flutter --version
           flutter doctor -v
-          flutter build apk --release --no-shrink --verbose 2>&1 | tee build-release.log
+          flutter build apk --release --verbose 2>&1 | tee build-release.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
