@@ -16,6 +16,7 @@
 
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:proxypin/network/channel/channel_context.dart';
 import 'package:proxypin/network/channel/host_port.dart';
@@ -72,7 +73,7 @@ abstract interface class Encoder<T> {
 /// 编解码器
 abstract class Codec<D, E> implements Decoder<D>, Encoder<E> {
   static const int defaultMaxInitialLineLength = 1024000; // 1M
-  static const int maxBodyLength = 4096000; // 4M
+  static final int maxBodyLength = Platform.isAndroid ? 33554432 : 8388608; // Android 32M, others 8M
 }
 
 /// http编解码

@@ -11,7 +11,7 @@ class ProtectSocketHolder {
     companion object {
         private var protectSocket: ProtectSocket? = null
 
-        fun setProtectSocket(protectSocket: ProtectSocket) {
+        fun setProtectSocket(protectSocket: ProtectSocket?) {
             this.protectSocket = protectSocket
         }
 

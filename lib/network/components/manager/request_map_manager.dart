@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:proxypin/network/util/pattern.dart';
 
 import '../../util/logger.dart';
 import '../../util/random.dart';
@@ -181,7 +182,7 @@ class RequestMapRule {
   String? itemPath;
 
   RequestMapRule({this.enabled = true, this.name, required this.url, required this.type, this.itemPath})
-      : _urlReg = RegExp(url.replaceAll("*", ".*").replaceFirst('?', '\\?'));
+      : _urlReg = PatternMatcher.wildcardToRegExp(url);
 
   bool match(String url) {
     if (enabled) {
@@ -201,7 +202,7 @@ class RequestMapRule {
   }
 
   void updatePathReg() {
-    _urlReg = RegExp(url.replaceAll("*", ".*").replaceFirst('?', '\\?'));
+    _urlReg = PatternMatcher.wildcardToRegExp(url);
   }
 
   Map<String, Object?> toJson() {

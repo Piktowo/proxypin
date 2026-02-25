@@ -261,7 +261,7 @@ class Server extends Network {
 
 class Client extends Network {
   Future<Channel> connect(HostAndPort hostAndPort, ChannelContext channelContext,
-      {Duration timeout = const Duration(seconds: 3)}) async {
+      {Duration timeout = const Duration(seconds: 10)}) async {
     String host = hostAndPort.host;
     //说明支持ipv6
     // if (host.startsWith("[") && host.endsWith(']')) {
@@ -282,7 +282,7 @@ class Client extends Network {
   /// ssl连接
   Future<Channel> secureConnect(HostAndPort hostAndPort, ChannelContext channelContext) async {
     return SecureSocket.connect(hostAndPort.host, hostAndPort.port,
-        timeout: const Duration(seconds: 3), onBadCertificate: (certificate) => true).then((socket) {
+        timeout: const Duration(seconds: 10), onBadCertificate: (certificate) => true).then((socket) {
       var channel = Channel(socket);
       channelContext.serverChannel = channel;
       return listen(channel, channelContext);

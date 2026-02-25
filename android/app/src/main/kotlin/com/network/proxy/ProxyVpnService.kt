@@ -152,11 +152,17 @@ class ProxyVpnService : VpnService(), ProtectSocket {
     }
 
     private fun disconnect() {
-        vpnThread?.run { stopThread() }
-        vpnInterface?.close()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        vpnInterface = null
         isRunning = false
+        vpnThread?.stopThread()
+        vpnThread = null
+        try {
+            vpnInterface?.close()
+        } catch (_: Exception) {
+        }
+        vpnInterface = null
+        ProtectSocketHolder.setProtectSocket(null)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun connect(
