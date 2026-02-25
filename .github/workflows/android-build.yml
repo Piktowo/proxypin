@@ -41,7 +41,7 @@ jobs:
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -keystore ci-release.keystore \
+              -keystore app/ci-release.keystore \
               -storepass android \
               -keypass android \
               -dname "CN=CI,O=ProxyPin,C=US"
@@ -55,7 +55,11 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          set -o pipefail
+          flutter --version
+          flutter doctor -v
+          flutter build apk --release --no-shrink --verbose 2>&1 | tee build-release.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -63,3 +67,11 @@ jobs:
           name: proxypin-android-apk
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+
+      - name: Upload build logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-logs
+          path: build-release.log
+          if-no-files-found: ignore
