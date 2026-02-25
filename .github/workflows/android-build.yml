@@ -135,11 +135,7 @@ jobs:
 
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.beta.outputs.tag }}"
-          MSG="✅ Android Beta Build Ready
-Tag: ${{ steps.beta.outputs.tag }}
-Repo: ${{ github.repository }}
-Release: $RELEASE_URL
-Run: $RUN_URL"
+          MSG=$'Android Beta Build Ready\nTag: ${{ steps.beta.outputs.tag }}\nRepo: ${{ github.repository }}\nRelease: '"$RELEASE_URL"$'\nRun: '"$RUN_URL"
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
@@ -149,7 +145,7 @@ Run: $RUN_URL"
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
             -F "chat_id=${TELEGRAM_CHAT_ID}" \
             -F "document=@${APK_PATH}" \
-            -F "caption=📦 ${{ steps.beta.outputs.tag }}" > /dev/null
+            -F "caption=APK ${{ steps.beta.outputs.tag }}" > /dev/null
 
       - name: Upload build logs (on failure)
         if: failure()
