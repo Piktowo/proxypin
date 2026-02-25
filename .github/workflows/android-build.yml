@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     name: Build Android APK
@@ -15,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -67,6 +72,84 @@ jobs:
           name: proxypin-android-apk
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+
+      - name: Generate beta tag
+        id: beta
+        shell: bash
+        run: |
+          echo "tag=beta.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "name=Beta ${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog from push commits
+        id: changelog
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+            LOGS="$(git log --no-merges --pretty=format:'- %s (%h)' "$RANGE" 2>/dev/null || true)"
+          else
+            LOGS="$(git log -n 10 --no-merges --pretty=format:'- %s (%h)')"
+          fi
+
+          if [ -z "$LOGS" ]; then
+            LOGS="- chore: no commit message found"
+          fi
+
+          {
+            echo "## Android Beta Build"
+            echo
+            echo "Tag: ${{ steps.beta.outputs.tag }}"
+            echo "Commit: ${{ github.sha }}"
+            echo
+            echo "### Changes"
+            echo "$LOGS"
+          } > release_notes.md
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.beta.outputs.tag }}
+          name: ${{ steps.beta.outputs.name }}
+          body_path: release_notes.md
+          prerelease: true
+          files: build/app/outputs/flutter-apk/*.apk
+          make_latest: false
+
+      - name: Push to Telegram
+        if: success()
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is empty, skip telegram push."
+            exit 0
+          fi
+
+          APK_PATH="$(ls build/app/outputs/flutter-apk/*.apk | head -n 1)"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "APK not found, skip telegram push."
+            exit 0
+          fi
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.beta.outputs.tag }}"
+          MSG="✅ Android Beta Build Ready
+Tag: ${{ steps.beta.outputs.tag }}
+Repo: ${{ github.repository }}
+Release: $RELEASE_URL
+Run: $RUN_URL"
+
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MSG}" \
+            --data-urlencode "disable_web_page_preview=true" > /dev/null
+
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${APK_PATH}" \
+            -F "caption=📦 ${{ steps.beta.outputs.tag }}" > /dev/null
 
       - name: Upload build logs (on failure)
         if: failure()

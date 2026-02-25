@@ -89,7 +89,11 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
 
   @override
   void onRequest(Channel channel, HttpRequest request) {
-    MobileApp.requestStateKey.currentState!.add(channel, request);
+    final state = MobileApp.requestStateKey.currentState;
+    if (state == null) {
+      return;
+    }
+    state.add(channel, request);
     PictureInPicture.addData(request.requestUrl);
 
     //监控内存 到达阈值清理
@@ -100,7 +104,7 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
 
   @override
   void onResponse(ChannelContext channelContext, HttpResponse response) {
-    MobileApp.requestStateKey.currentState!.addResponse(channelContext, response);
+    MobileApp.requestStateKey.currentState?.addResponse(channelContext, response);
   }
 
   @override
@@ -310,23 +314,17 @@ class MobileHomeState extends State<MobileHomePage> implements EventListener, Li
 
     String content = isCN
         ? '提示：默认不会开启HTTPS抓包，请安装证书后再开启HTTPS抓包。\n\n'
-            '1. 增加收藏导出和导入；\n'
-            '2. 增加请求解密，可配置AES自动解密消息体；\n'
-            '3. 脚本支持远程URL获取执行；\n'
-            '4. HTTP Header 展示增加文本和表格切换；\n'
-            '5. 增加 Request Param 列表展示；\n'
-            '6. 添加zlib解码支持\n'
-            '7. 应用过滤列表增加是否显示系统应用；\n'
-            '8. 更新JSON深色主题色，以提高可见度和美观度；\n'
+            '1. 修复 Android 16 证书导出兼容问题，导出后更容易被系统识别并安装；\n'
+            '2. 优化 Android 证书导出流程，改为系统分享方式导出；\n'
+            '3. 增强 Android 停止抓包后的资源释放，降低停止后仍持续处理流量的概率；\n'
+            '4. 修复规则匹配对特殊字符的兼容问题（仅将 * 作为通配符）；\n'
+            '5. 提升慢网络与大响应体场景下的稳定性；\n'
         : 'Note: HTTPS capture is disabled by default — please install the certificate before enabling HTTPS capture.\n\n'
-            '1. Added import/export for Favorites.\n'
-            '2. Added request decryption with configurable AES automatic body decryption.\n'
-            '3. Scripts can now be fetched from remote URLs and executed.\n'
-            '4. HTTP header view now supports switching between text and table modes.\n'
-            '5. Added a Request Params list view.\n'
-            '6. Added zlib decoding support.\n'
-            '7. App filter list now includes an option to show system apps.\n'
-            '8. Updated JSON dark-theme colors for better visibility and appearance.\n';
+            '1. Fixed Android 16 certificate export compatibility for better install recognition.\n'
+            '2. Optimized Android certificate export by using system share flow.\n'
+            '3. Improved Android stop-capture resource cleanup to reduce residual traffic handling after stop.\n'
+            '4. Fixed special-character rule matching compatibility (only * acts as wildcard).\n'
+            '5. Improved stability for slow-network and large-response scenarios.\n';
     showAlertDialog(isCN ? '更新内容V${AppConfiguration.version}' : "What's new in V${AppConfiguration.version}", content,
         () {
       widget.appConfiguration.upgradeNoticeV25 = false;
@@ -370,6 +368,8 @@ class RequestPageState extends State<RequestPage> {
   final ValueNotifier<RemoteModel> remoteDevice = ValueNotifier(RemoteModel(connect: false));
 
   late ProxyServer proxyServer;
+  Timer? _remoteCheckTimer;
+  bool _checkingRemote = false;
 
   AppLocalizations get localizations => AppLocalizations.of(context)!;
 
@@ -382,8 +382,10 @@ class RequestPageState extends State<RequestPage> {
     remoteDevice.addListener(() {
       if (remoteDevice.value.connect) {
         proxyServer.configuration.remoteHost = "http://${remoteDevice.value.host}:${remoteDevice.value.port}";
-        checkConnectTask(context);
+        checkConnectTask();
       } else {
+        _remoteCheckTimer?.cancel();
+        _remoteCheckTimer = null;
         proxyServer.configuration.remoteHost = null;
       }
     });
@@ -391,6 +393,8 @@ class RequestPageState extends State<RequestPage> {
 
   @override
   void dispose() {
+    _remoteCheckTimer?.cancel();
+    _remoteCheckTimer = null;
     remoteDevice.dispose();
     super.dispose();
   }
@@ -468,27 +472,36 @@ class RequestPageState extends State<RequestPage> {
   }
 
   /// 检查远程连接
-  Future<void> checkConnectTask(BuildContext context) async {
+  Future<void> checkConnectTask() async {
+    _remoteCheckTimer?.cancel();
+    _remoteCheckTimer = null;
     int retry = 0;
-    Timer.periodic(const Duration(milliseconds: 15000), (timer) async {
+    _remoteCheckTimer = Timer.periodic(const Duration(milliseconds: 15000), (timer) async {
       if (remoteDevice.value.connect == false) {
         timer.cancel();
         return;
       }
+      if (_checkingRemote) {
+        return;
+      }
+      _checkingRemote = true;
 
       try {
         var response = await HttpClients.get("http://${remoteDevice.value.host}:${remoteDevice.value.port}/ping")
             .timeout(const Duration(seconds: 3));
         if (response.bodyAsString == "pong") {
           retry = 0;
+          _checkingRemote = false;
           return;
         }
       } catch (e) {
         retry++;
       }
+      _checkingRemote = false;
 
       if (retry > 3) {
-        if (context.mounted) {
+        timer.cancel();
+        if (mounted) {
           ScaffoldMessenger.of(context).removeCurrentSnackBar();
 
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -496,7 +509,7 @@ class RequestPageState extends State<RequestPage> {
               action: SnackBarAction(
                   label: localizations.disconnect,
                   onPressed: () {
-                    timer.cancel();
+                    _remoteCheckTimer?.cancel();
                     remoteDevice.value = RemoteModel(connect: false);
                   })));
         }

@@ -266,15 +266,27 @@ class ProxyVpnService : VpnService(), ProtectSocket {
         val packages = allowPackages?.filter { it != baseContext.packageName }
         if (packages?.isNotEmpty() == true) {
             packages.forEach {
-                build.addAllowedApplication(it)
+                try {
+                    build.addAllowedApplication(it)
+                } catch (e: Exception) {
+                    Log.w("ProxyVpnService", "skip invalid allowed app: $it", e)
+                }
             }
         } else {
-            build.addDisallowedApplication(baseContext.packageName)
+            try {
+                build.addDisallowedApplication(baseContext.packageName)
+            } catch (e: Exception) {
+                Log.w("ProxyVpnService", "failed to disallow self package", e)
+            }
         }
 
         disallowApps?.forEach {
             if (packages?.contains(it) == true) return@forEach
-            build.addDisallowedApplication(it)
+            try {
+                build.addDisallowedApplication(it)
+            } catch (e: Exception) {
+                Log.w("ProxyVpnService", "skip invalid disallowed app: $it", e)
+            }
         }
 
         build.setConfigureIntent(
