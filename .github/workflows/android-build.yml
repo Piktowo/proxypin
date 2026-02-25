@@ -117,12 +117,21 @@ jobs:
 
       - name: Push to Telegram
         if: success()
+        continue-on-error: true
         shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+          TOKEN="${TELEGRAM_BOT_TOKEN#BOT_TOKEN=}"
+          TOKEN="${TOKEN%\"}"
+          TOKEN="${TOKEN#\"}"
+
+          CHAT_ID="${TELEGRAM_CHAT_ID#CHAT_ID=}"
+          CHAT_ID="${CHAT_ID%\"}"
+          CHAT_ID="${CHAT_ID#\"}"
+
+          if [ -z "$TOKEN" ] || [ -z "$CHAT_ID" ]; then
             echo "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is empty, skip telegram push."
             exit 0
           fi
@@ -137,13 +146,13 @@ jobs:
           RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.beta.outputs.tag }}"
           MSG=$'Android Beta Build Ready\nTag: ${{ steps.beta.outputs.tag }}\nRepo: ${{ github.repository }}\nRelease: '"$RELEASE_URL"$'\nRun: '"$RUN_URL"
 
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+          curl -sS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
             --data-urlencode "text=${MSG}" \
             --data-urlencode "disable_web_page_preview=true" > /dev/null
 
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+          curl -sS -X POST "https://api.telegram.org/bot${TOKEN}/sendDocument" \
+            -F "chat_id=${CHAT_ID}" \
             -F "document=@${APK_PATH}" \
             -F "caption=APK ${{ steps.beta.outputs.tag }}" > /dev/null
 
