@@ -32,6 +32,7 @@ import 'package:proxypin/storage/shared_preference_keys.dart';
 import 'package:proxypin/ui/component/utils.dart';
 import 'package:proxypin/ui/mobile/menu/drawer.dart';
 import 'package:proxypin/utils/lang.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MobileSslWidget extends StatefulWidget {
@@ -267,11 +268,29 @@ class _MobileSslState extends State<MobileSslWidget> {
   void _exportFile(String name, {File? file, Uint8List? bytes}) async {
     bytes ??= await file!.readAsBytes();
 
+    if (Platform.isAndroid) {
+      await _shareExport(name, bytes);
+      return;
+    }
+
     String? outputFile = await FilePicker.platform
         .saveFile(dialogTitle: 'Please select the path to save:', fileName: name, bytes: bytes);
 
     if (outputFile != null && mounted) {
       AppLocalizations localizations = AppLocalizations.of(context)!;
+      FlutterToastr.show(localizations.success, context);
+    }
+  }
+
+  Future<void> _shareExport(String fileName, Uint8List bytes) async {
+    final mimeType = _certMimeType(fileName);
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: mimeType, name: fileName)],
+        fileNameOverrides: [fileName],
+      ),
+    );
+    if (result.status == ShareResultStatus.success && mounted) {
       FlutterToastr.show(localizations.success, context);
     }
   }
@@ -398,11 +417,31 @@ class _AndroidCaInstallState extends State<AndroidCaInstall> with SingleTickerPr
 
   void _downloadCert(String name) async {
     var caFile = await CertificateManager.certificateFile();
+    final bytes = await caFile.readAsBytes();
+
+    if (Platform.isAndroid) {
+      await _shareExport(name, bytes);
+      return;
+    }
+
     String? outputFile = await FilePicker.platform
-        .saveFile(dialogTitle: 'Please select the path to save:', fileName: name, bytes: await caFile.readAsBytes());
+        .saveFile(dialogTitle: 'Please select the path to save:', fileName: name, bytes: bytes);
 
     if (outputFile != null && mounted) {
       AppLocalizations localizations = AppLocalizations.of(context)!;
+      FlutterToastr.show(localizations.success, context);
+    }
+  }
+
+  Future<void> _shareExport(String fileName, Uint8List bytes) async {
+    final mimeType = _certMimeType(fileName);
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: mimeType, name: fileName)],
+        fileNameOverrides: [fileName],
+      ),
+    );
+    if (result.status == ShareResultStatus.success && mounted) {
       FlutterToastr.show(localizations.success, context);
     }
   }
@@ -464,6 +503,20 @@ class _AndroidCaInstallState extends State<AndroidCaInstall> with SingleTickerPr
     }
     return null;
   }
+}
+
+String _certMimeType(String fileName) {
+  final lower = fileName.toLowerCase();
+  if (lower.endsWith('.crt') || lower.endsWith('.cer') || lower.endsWith('.0')) {
+    return 'application/x-x509-ca-cert';
+  }
+  if (lower.endsWith('.pem')) {
+    return 'application/x-pem-file';
+  }
+  if (lower.endsWith('.p12') || lower.endsWith('.pfx')) {
+    return 'application/x-pkcs12';
+  }
+  return 'application/octet-stream';
 }
 
 Future<bool> evaluateChainTrusted(String caPem) async {
