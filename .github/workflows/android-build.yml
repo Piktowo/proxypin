@@ -45,12 +45,12 @@ jobs:
               -keypass android \
               -dname "CN=CI,O=ProxyPin,C=US"
 
-            cat > key.properties <<EOF
-            storePassword=android
-            keyPassword=android
-            keyAlias=ci_key
-            storeFile=ci-release.keystore
-            EOF
+            printf '%s\n' \
+              'storePassword=android' \
+              'keyPassword=android' \
+              'keyAlias=ci_key' \
+              'storeFile=ci-release.keystore' \
+              > key.properties
           fi
 
       - name: Build release APK
